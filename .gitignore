@@ -1,0 +1,25 @@
+# =========================
+# JUCE / Audio Plugin Builds
+# =========================
+Builds/
+build/
+cmake-build-*/
+out/
+
+# macOS
+.DS_Store
+
+# Xcode
+*.xcuserdata
+*.xcworkspace
+DerivedData/
+
+# Binaries
+*.a
+*.dylib
+*.so
+*.exe
+*.app
+*.aaxplugin
+*.vst3
+*.component
