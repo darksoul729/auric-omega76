@@ -22,8 +22,11 @@ public:
     void setLegendWidth (int px); // 0 = auto
 
     std::function<void (int)> onChange;
+    // hover index: 0..2, -2 = control hover (non-segment), -1 = exit
+    std::function<void (int)> onHover;
 
     // interaction
+    void mouseEnter (const juce::MouseEvent&) override;
     void mouseMove (const juce::MouseEvent&) override;
     void mouseExit (const juce::MouseEvent&) override;
     void mouseDown (const juce::MouseEvent&) override;
@@ -42,6 +45,7 @@ private:
     int selected = 0;
     int hovered  = -1;
     int pressed  = -1;
+    int hoverInfo = -1;
 
     bool drawLeftLegend = false;
     juce::String leftSymbol, leftText;

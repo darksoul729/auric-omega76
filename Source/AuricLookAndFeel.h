@@ -10,6 +10,7 @@ public:
     // biar PluginEditor kamu gak error lagi
     // 0=S, 1=M, 2=L
     int uiScaleIndex = 1;
+    float uiScale = 1.0f;
 
     // Sliders
     void drawRotarySlider (juce::Graphics& g, int x, int y, int w, int h,
@@ -51,4 +52,13 @@ public:
 
     // Labels (no box)
     void drawLabel (juce::Graphics& g, juce::Label& label) override;
+
+    // Popup menu
+    void drawPopupMenuBackground (juce::Graphics& g, int width, int height) override;
+    void drawPopupMenuItem (juce::Graphics& g, const juce::Rectangle<int>& area,
+                            bool isSeparator, bool isActive, bool isHighlighted,
+                            bool isTicked, bool hasSubMenu, const juce::String& text,
+                            const juce::String& shortcutKeyText,
+                            const juce::Drawable* icon,
+                            const juce::Colour* textColourToUse) override;
 };

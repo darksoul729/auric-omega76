@@ -1,22 +1,36 @@
 #include "SegmentedSwitch.h"
 #include "AuricHelpers.h"
-
 #include <cmath>
 
 //==============================================================================
-// Local theme (matte hardware)
+// Theme (match Auric panel: clean, matte, subtle gold)
 namespace SegTheme
 {
-    static inline juce::Colour goldText() { return juce::Colour::fromRGB (200, 170, 110); }
-    static inline juce::Colour goldHi()   { return juce::Colour::fromRGB (220, 190, 130); }
+    static inline juce::Colour goldText() { return juce::Colour::fromRGB (226, 195, 129); }
+    static inline juce::Colour goldHi()   { return juce::Colour::fromRGB (251, 247, 175); }
 
-    static inline juce::Colour bg0()      { return juce::Colour::fromRGB (10, 10, 10); }
-    static inline juce::Colour bg1()      { return juce::Colour::fromRGB (18, 18, 18); }
-    static inline juce::Colour rimHi()    { return juce::Colour::fromRGB (60, 60, 60); }
-    static inline juce::Colour rimLo()    { return juce::Colour::fromRGB (5, 5, 5); }
+    static inline juce::Colour bg0()      { return juce::Colour::fromRGB (10, 10, 9);    }
+    static inline juce::Colour bg1()      { return juce::Colour::fromRGB (18, 18, 16);  }
+
+    static inline juce::Colour rimHi()    { return juce::Colour::fromRGB (52, 52, 46);  }
+    static inline juce::Colour rimLo()    { return juce::Colour::fromRGB (6, 6, 5);     }
+
+    static inline juce::Colour inkDark()  { return juce::Colour::fromRGBA (0, 0, 0, 205); }
 }
 
 static inline float clampf (float v, float lo, float hi) { return juce::jlimit (lo, hi, v); }
+
+static juce::Font withTracking (juce::Font f, float trackingPx)
+{
+    const float denom  = juce::jmax (1.0f, f.getHeight());
+    const float factor = trackingPx / denom;
+#if defined (JUCE_MAJOR_VERSION) && JUCE_MAJOR_VERSION >= 7
+    return f.withExtraKerningFactor (factor);
+#else
+    f.setExtraKerningFactor (factor);
+    return f;
+#endif
+}
 
 static inline void embossText (juce::Graphics& g,
                                const juce::String& text,
@@ -29,19 +43,16 @@ static inline void embossText (juce::Graphics& g,
 
     g.setFont (font);
 
-    g.setColour (Colour::fromRGBA (0, 0, 0, 135));
+    // subtle engraved shadow only (keep clean)
+    g.setColour (Colour::fromRGBA (0, 0, 0, 120));
     g.drawText (text, bounds.translated (1, 1), just, false);
-
-    g.setColour (Colour::fromRGBA (255, 255, 255, 18));
-    g.drawText (text, bounds.translated (-1, -1), just, false);
 
     g.setColour (main);
     g.drawText (text, bounds, just, false);
 }
 
-// Path segmen: only outer corners rounded (tanpa overload 12 arg)
-static juce::Path makeSegmentPath (juce::Rectangle<float> r, float cr,
-                                  bool roundLeft, bool roundRight)
+// outer corners only
+static juce::Path makeSegmentPath (juce::Rectangle<float> r, float cr, bool roundLeft, bool roundRight)
 {
     using namespace juce;
 
@@ -55,28 +66,33 @@ static juce::Path makeSegmentPath (juce::Rectangle<float> r, float cr,
 
     p.startNewSubPath (x + (roundLeft ? cr : 0.0f), y);
 
-    // top -> right
     p.lineTo (xr - (roundRight ? cr : 0.0f), y);
     if (roundRight) p.quadraticTo (xr, y, xr, y + cr);
     else            p.lineTo (xr, y);
 
-    // right -> bottom
     p.lineTo (xr, yb - (roundRight ? cr : 0.0f));
     if (roundRight) p.quadraticTo (xr, yb, xr - cr, yb);
     else            p.lineTo (xr, yb);
 
-    // bottom -> left
     p.lineTo (x + (roundLeft ? cr : 0.0f), yb);
     if (roundLeft)  p.quadraticTo (x, yb, x, yb - cr);
     else            p.lineTo (x, yb);
 
-    // left -> top
     p.lineTo (x, y + (roundLeft ? cr : 0.0f));
     if (roundLeft)  p.quadraticTo (x, y, x + cr, y);
     else            p.lineTo (x, y);
 
     p.closeSubPath();
     return p;
+}
+
+static inline void clipRounded (juce::Graphics& g, juce::Rectangle<float> r, float rr, std::function<void()> fn)
+{
+    using namespace juce;
+    Graphics::ScopedSaveState ss (g);
+    Path p; p.addRoundedRectangle (r, rr);
+    g.reduceClipRegion (p);
+    fn();
 }
 
 //==============================================================================
@@ -164,16 +180,32 @@ void SegmentedSwitch3::mouseMove (const juce::MouseEvent& e)
 {
     const int h = hitTestIndex (e.getPosition());
     if (h != hovered) { hovered = h; repaint(); }
+
+    const bool inside = getLocalBounds().contains (e.getPosition());
+    const int info = (h >= 0 ? h : (inside ? -2 : -1));
+    if (info != hoverInfo)
+    {
+        hoverInfo = info;
+        if (onHover) onHover (hoverInfo);
+    }
 }
+
+void SegmentedSwitch3::mouseEnter (const juce::MouseEvent& e) { mouseMove (e); }
 
 void SegmentedSwitch3::mouseExit (const juce::MouseEvent&)
 {
     if (hovered != -1) { hovered = -1; repaint(); }
+    if (hoverInfo != -1)
+    {
+        hoverInfo = -1;
+        if (onHover) onHover (-1);
+    }
 }
 
 void SegmentedSwitch3::mouseDown (const juce::MouseEvent& e)
 {
     pressed = hitTestIndex (e.getPosition());
+    mouseMove (e);
     repaint();
 }
 
@@ -181,6 +213,7 @@ void SegmentedSwitch3::mouseDrag (const juce::MouseEvent& e)
 {
     const int p = hitTestIndex (e.getPosition());
     if (p != pressed) { pressed = p; repaint(); }
+    mouseMove (e);
 }
 
 void SegmentedSwitch3::mouseUp (const juce::MouseEvent& e)
@@ -199,6 +232,8 @@ void SegmentedSwitch3::mouseUp (const juce::MouseEvent& e)
     repaint();
 }
 
+//==============================================================================
+// paint (CLEAN HARDWARE)
 void SegmentedSwitch3::paint (juce::Graphics& g)
 {
     using namespace juce;
@@ -209,82 +244,92 @@ void SegmentedSwitch3::paint (juce::Graphics& g)
     if (bounds.getHeight() < 10.0f) return;
 
     const bool hasLegend = drawLeftLegend && (leftText.isNotEmpty() || leftSymbol.isNotEmpty());
-    const bool hasSub =
-        subLabels[0].isNotEmpty() || subLabels[1].isNotEmpty() || subLabels[2].isNotEmpty();
+    const bool hasSub = subLabels[0].isNotEmpty() || subLabels[1].isNotEmpty() || subLabels[2].isNotEmpty();
 
     int legendW = 0;
     if (hasLegend)
         legendW = (legendWidthOverride > 0) ? legendWidthOverride
                                             : jmin (120, (int) (bounds.getWidth() * 0.30f));
 
+    // rounded like your other controls
     const float rrOuter = clampf (bounds.getHeight() * 0.26f, 8.0f, 14.0f);
     const float rrInner = rrOuter - 2.2f;
 
-    //==================== OUTER CAPSULE ====================
+    // =========================
+    // OUTER BEZEL (clean)
+    // =========================
     {
-        g.setColour (Colour::fromRGBA (0, 0, 0, 160));
-        g.fillRoundedRectangle (bounds.expanded (1.4f), rrOuter + 1.2f);
+        auto sh = bounds.expanded (2.0f).translated (0.0f, 1.9f);
+        ColourGradient sg (Colours::black.withAlpha (0.00f), sh.getCentreX(), sh.getY(),
+                           Colours::black.withAlpha (0.52f), sh.getCentreX(), sh.getBottom(), false);
+        sg.addColour (0.60, Colours::black.withAlpha (0.18f));
+        g.setGradientFill (sg);
+        g.fillRoundedRectangle (sh, rrOuter + 1.6f);
 
-        ColourGradient bezel (SegTheme::rimHi().withAlpha (0.95f), bounds.getCentreX(), bounds.getY(),
-                              SegTheme::rimLo().withAlpha (0.98f), bounds.getCentreX(), bounds.getBottom(), false);
-        bezel.addColour (0.55, SegTheme::bg1().withAlpha (0.95f));
-
+        ColourGradient bezel (SegTheme::rimHi().withAlpha (0.98f), bounds.getCentreX(), bounds.getY(),
+                              SegTheme::rimLo().withAlpha (0.99f), bounds.getCentreX(), bounds.getBottom(), false);
+        bezel.addColour (0.52, SegTheme::bg1().withAlpha (0.98f));
         g.setGradientFill (bezel);
         g.fillRoundedRectangle (bounds, rrOuter);
 
-        g.setColour (Colour::fromRGBA (255, 255, 255, 12));
-        g.drawRoundedRectangle (bounds.reduced (0.6f), rrOuter, 1.0f);
+        // thin machined lines
+        g.setColour (Colour::fromRGBA (255, 255, 255, 10));
+        g.drawRoundedRectangle (bounds.reduced (0.8f), rrOuter - 0.8f, 1.0f);
 
-        g.setColour (Colour::fromRGBA (0, 0, 0, 210));
-        g.drawRoundedRectangle (bounds.reduced (1.8f), rrOuter - 0.8f, 1.6f);
+        g.setColour (Colour::fromRGBA (0, 0, 0, 220));
+        g.drawRoundedRectangle (bounds.reduced (1.8f), rrOuter - 1.6f, 1.35f);
     }
 
-    auto inner = bounds.reduced (2.6f);
-
-    //==================== INNER WELL ====================
+    // =========================
+    // INNER WELL (recess)
+    // =========================
+    auto inner = bounds.reduced (2.8f);
     {
         ColourGradient well (SegTheme::bg1(), inner.getCentreX(), inner.getY(),
                              SegTheme::bg0(), inner.getCentreX(), inner.getBottom(), false);
-        well.addColour (0.55, Colour::fromRGB (12, 12, 12));
-
+        well.addColour (0.55, Colour::fromRGB (10, 10, 10));
         g.setGradientFill (well);
         g.fillRoundedRectangle (inner, rrInner);
 
+        // recess bevel (subtle)
         g.setColour (Colour::fromRGBA (255, 255, 255, 8));
-        g.drawRoundedRectangle (inner.reduced (0.6f), rrInner - 0.2f, 1.0f);
+        g.drawRoundedRectangle (inner.reduced (0.9f).translated (0.0f, -0.25f), rrInner - 0.9f, 1.0f);
 
-        g.setColour (Colour::fromRGBA (0, 0, 0, 220));
-        g.drawRoundedRectangle (inner.reduced (1.2f), rrInner - 0.8f, 1.1f);
+        g.setColour (Colour::fromRGBA (0, 0, 0, 235));
+        g.drawRoundedRectangle (inner.reduced (1.35f).translated (0.0f, 0.55f), rrInner - 1.35f, 1.25f);
+
+        // slight vignette
+        clipRounded (g, inner, rrInner, [&]
+        {
+            ColourGradient v (Colour::fromRGBA (0,0,0,85), inner.getCentreX(), inner.getBottom(),
+                              Colour::fromRGBA (0,0,0,0),  inner.getCentreX(), inner.getY(), false);
+            g.setGradientFill (v);
+            g.fillRect (inner);
+        });
     }
 
-    //==================== CLIP to inner capsule ====================
-    Path clip;
-    clip.addRoundedRectangle (inner, rrInner);
-
+    // clip to inner
+    Path clip; clip.addRoundedRectangle (inner, rrInner);
     Graphics::ScopedSaveState ss (g);
     g.reduceClipRegion (clip);
 
-    // ✅ FIX: hitung subH pakai inner height, bukan bounds height
     const float HIn = inner.getHeight();
 
-    const float subH = (hasSub && HIn >= 30.0f)
-                         ? jlimit (10.0f, 16.0f, HIn * 0.32f)
-                         : 0.0f;
-
+    const float subH = (hasSub && HIn >= 30.0f) ? jlimit (10.0f, 16.0f, HIn * 0.32f) : 0.0f;
     const float btnH = jmax (10.0f, HIn - subH);
 
-    // Areas
     auto btnArea = inner.withHeight (btnH);
     auto subArea = inner.withTrimmedTop (btnH);
 
-    // Sub area padding biar teks nggak nabrak rounding bawah
     if (subH > 0.5f)
-        subArea = subArea.reduced (2.0f, 1.0f);
+        subArea = subArea.reduced (2.0f, 2.0f);
 
     auto legendArea = btnArea.removeFromLeft ((float) legendW);
     auto segArea    = btnArea;
 
-    //==================== LEFT LEGEND ====================
+    // =========================
+    // LEFT LEGEND (clean)
+    // =========================
     if (hasLegend)
     {
         auto lr = legendArea.reduced (6.0f, 2.0f);
@@ -300,22 +345,40 @@ void SegmentedSwitch3::paint (juce::Graphics& g)
 
         lr.removeFromLeft (2.0f);
         embossText (g, leftText, lr.toNearestInt(),
-                    AuricHelpers::makeFont (fontSize, Font::plain),
+                    withTracking (AuricHelpers::makeFont (fontSize, Font::plain), 0.9f),
                     gold.withAlpha (0.90f), Justification::centredLeft);
 
-        // divider
-        g.setColour (Colour::fromRGBA (0, 0, 0, 150));
-        g.drawLine (segArea.getX(), segArea.getY() + 4.0f,
-                    segArea.getX(), segArea.getBottom() - 4.0f, 1.2f);
+        // machined divider seam
+        const float x = segArea.getX();
+        g.setColour (Colour::fromRGBA (0, 0, 0, 190));
+        g.drawLine (x, segArea.getY() + 4.0f, x, segArea.getBottom() - 4.0f, 1.25f);
+        g.setColour (Colour::fromRGBA (255, 255, 255, 9));
+        g.drawLine (x + 1.0f, segArea.getY() + 4.0f, x + 1.0f, segArea.getBottom() - 4.0f, 1.0f);
     }
 
-    //==================== SEGMENTS ====================
+    // =========================
+    // SEGMENTS (match Auric aesthetic)
+    // =========================
     auto segInner = segArea.reduced (4.0f, 3.0f);
     const float segW = segInner.getWidth() / 3.0f;
 
     const auto gold = SegTheme::goldText();
     const float fontSize = jlimit (12.0f, 18.0f, segInner.getHeight() * 0.62f);
     const float cr = jlimit (4.0f, 10.0f, segInner.getHeight() * 0.26f);
+
+    auto drawSelectedGlow = [&] (Rectangle<float> r, float rr, float a)
+    {
+        if (a <= 0.001f) return;
+        clipRounded (g, r, rr, [&]
+        {
+            ColourGradient cg (SegTheme::goldHi().withAlpha (0.0f), r.getCentreX(), r.getCentreY(),
+                               SegTheme::goldHi().withAlpha (a),   r.getCentreX(), r.getY(), false);
+            cg.addColour (0.60, SegTheme::goldText().withAlpha (a * 0.45f));
+            cg.addColour (1.00, Colour::fromRGBA (0,0,0,0));
+            g.setGradientFill (cg);
+            g.fillRect (r);
+        });
+    };
 
     for (int i = 0; i < 3; ++i)
     {
@@ -326,7 +389,7 @@ void SegmentedSwitch3::paint (juce::Graphics& g)
         const bool isDown  = (i == pressed);
 
         auto face = cell.reduced (2.0f, 2.0f);
-        if (isDown && ! isSel) face = face.translated (0.0f, 1.0f);
+        if (isDown) face = face.translated (0.0f, 1.0f);
 
         const bool roundL = (i == 0);
         const bool roundR = (i == 2);
@@ -335,72 +398,94 @@ void SegmentedSwitch3::paint (juce::Graphics& g)
 
         if (isSel)
         {
-            ColourGradient plate (Colour::fromRGB (30, 30, 30), face.getCentreX(), face.getY(),
-                                  Colour::fromRGB (12, 12, 12), face.getCentreX(), face.getBottom(), false);
-            plate.addColour (0.55, Colour::fromRGB (18, 18, 18));
+            // raised plate (subtle)
+            g.setColour (Colour::fromRGBA (0, 0, 0, 130));
+            { auto sh = path; sh.applyTransform (AffineTransform::translation (0.0f, 1.6f)); g.fillPath (sh); }
 
+            ColourGradient plate (Colour::fromRGB (36, 36, 34), face.getCentreX(), face.getY(),
+                                  Colour::fromRGB (9, 9, 9),     face.getCentreX(), face.getBottom(), false);
+            plate.addColour (0.55, Colour::fromRGB (18, 18, 18));
             g.setGradientFill (plate);
             g.fillPath (path);
 
-            g.setColour (Colour::fromRGBA (255, 255, 255, 16));
-            g.drawLine (face.getX() + 6.0f, face.getY() + 1.0f,
-                        face.getRight() - 6.0f, face.getY() + 1.0f, 1.0f);
+            // spec band (tiny)
+            clipRounded (g, face, cr, [&]
+            {
+                auto top = face.withHeight (face.getHeight() * 0.42f);
+                ColourGradient gl (Colour::fromRGBA (255,255,255,18), top.getCentreX(), top.getY(),
+                                   Colour::fromRGBA (255,255,255,0),  top.getCentreX(), top.getBottom(), false);
+                gl.addColour (0.45, Colour::fromRGBA (255,255,255,9));
+                g.setGradientFill (gl);
+                g.fillRect (top);
+            });
 
-            g.setColour (SegTheme::goldHi().withAlpha (0.22f));
-            g.strokePath (path, PathStrokeType (1.2f));
+            drawSelectedGlow (face.reduced (1.5f), cr - 1.0f, isDown ? 0.09f : 0.13f);
 
-            g.setColour (Colour::fromRGBA (0, 0, 0, 165));
+            // gold rim (thin)
+            g.setColour (SegTheme::goldHi().withAlpha (0.18f));
             g.strokePath (path, PathStrokeType (1.0f));
+
+            g.setColour (Colour::fromRGBA (0,0,0,170));
+            g.strokePath (path, PathStrokeType (1.1f), AffineTransform::translation (0.0f, 0.55f));
         }
         else
         {
-            ColourGradient plate (Colour::fromRGB (22, 22, 22), face.getCentreX(), face.getY(),
-                                  Colour::fromRGB (9, 9, 9),   face.getCentreX(), face.getBottom(), false);
-
-            if (isDown)
-                plate = ColourGradient (Colour::fromRGB (18, 18, 18), face.getCentreX(), face.getY(),
-                                        Colour::fromRGB (7, 7, 7),     face.getCentreX(), face.getBottom(), false);
-
-            g.setGradientFill (plate);
+            // recessed insert
+            ColourGradient insert (Colour::fromRGB (15, 15, 14), face.getCentreX(), face.getY(),
+                                   Colour::fromRGB (6, 6, 6),     face.getCentreX(), face.getBottom(), false);
+            insert.addColour (0.55, Colour::fromRGB (10, 10, 10));
+            g.setGradientFill (insert);
             g.fillPath (path);
 
-            g.setColour (Colour::fromRGBA (0, 0, 0, 190));
-            g.strokePath (path, PathStrokeType (1.2f));
+            // bevel lines
+            g.setColour (Colour::fromRGBA (0,0,0,220));
+            g.strokePath (path, PathStrokeType (1.25f), AffineTransform::translation (0.0f, 0.75f));
 
-            g.setColour (Colour::fromRGBA (255, 255, 255, 10));
-            g.strokePath (path, PathStrokeType (1.0f), AffineTransform::translation (0.0f, -0.2f));
+            g.setColour (Colour::fromRGBA (255,255,255,8));
+            g.strokePath (path, PathStrokeType (1.0f), AffineTransform::translation (0.0f, -0.25f));
 
             if (isHover && ! isDown)
             {
-                g.setColour (gold.withAlpha (0.030f));
+                g.setColour (SegTheme::goldText().withAlpha (0.022f));
                 g.fillPath (path);
+
+                g.setColour (SegTheme::goldHi().withAlpha (0.08f));
+                g.strokePath (path, PathStrokeType (1.0f));
             }
         }
 
+        // machined seam dividers
         if (i > 0)
         {
             const float x = cell.getX();
-            g.setColour (Colour::fromRGBA (0, 0, 0, 140));
-            g.drawLine (x, cell.getY() + 4.0f, x, cell.getBottom() - 4.0f, 1.0f);
+            g.setColour (Colour::fromRGBA (0,0,0,190));
+            g.drawLine (x, cell.getY() + 4.0f, x, cell.getBottom() - 4.0f, 1.25f);
+
+            g.setColour (Colour::fromRGBA (255,255,255,9));
+            g.drawLine (x + 1.0f, cell.getY() + 4.0f, x + 1.0f, cell.getBottom() - 4.0f, 1.0f);
         }
 
-        auto textCol = gold.withAlpha (isSel ? 0.95f : 0.78f);
-        if (isDown && ! isSel) textCol = textCol.withAlpha (0.70f);
+        // text colour (clean)
+        auto textCol = (isSel ? SegTheme::goldHi() : gold).withAlpha (isSel ? 0.96f : 0.72f);
+        if (isHover && ! isSel) textCol = textCol.withAlpha (0.84f);
+        if (isDown && ! isSel)  textCol = textCol.withAlpha (0.66f);
 
         auto tb = cell.toNearestInt();
-        tb.reduce (0, 1); // ✅ biar gak ke-clip atas/bawah
+        tb.reduce (0, 1);
         if (isSel || (isDown && ! isSel)) tb = tb.translated (0, 1);
 
         embossText (g, labels[i], tb,
-                    AuricHelpers::makeFont (fontSize, Font::plain),
+                    withTracking (AuricHelpers::makeFont (fontSize, Font::plain), 0.95f),
                     textCol, Justification::centred);
     }
 
-    //==================== SUB LABELS ====================
+    // =========================
+    // SUB LABELS
+    // =========================
     if (subH > 0.5f)
     {
-        const float subFont = jlimit (9.5f, 12.5f, subArea.getHeight() * 0.78f);
-        auto f = AuricHelpers::makeFont (subFont, Font::plain);
+        const float subFont = jlimit (9.3f, 12.2f, subArea.getHeight() * 0.78f);
+        auto f = withTracking (AuricHelpers::makeFont (subFont, Font::plain), 0.85f);
 
         const float segW2 = segArea.getWidth() / 3.0f;
 
@@ -411,13 +496,13 @@ void SegmentedSwitch3::paint (juce::Graphics& g)
                                         (int) std::round (segW2),
                                         (int) std::round (subArea.getHeight()));
 
-            cell.reduce (0, 1); // ✅ safety padding
+            cell.reduce (0, 1);
 
             g.setFont (f);
             g.setColour (Colour::fromRGBA (0, 0, 0, 120));
             g.drawText (subLabels[i], cell.translated (1, 1), Justification::centred, false);
 
-            g.setColour (SegTheme::goldText().withAlpha (0.82f));
+            g.setColour (SegTheme::goldText().withAlpha (0.72f));
             g.drawText (subLabels[i], cell, Justification::centred, false);
         }
     }

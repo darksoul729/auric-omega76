@@ -1,139 +1,108 @@
-# Plugin Editor Refactoring Summary
+# AuricOmega76 - Struktur File & Fungsi
 
-## Masalah Awal
-File `PluginEditor.cpp` memiliki 1154 baris kode yang terlalu besar dan sulit untuk di-maintain.
-
-## Solusi Refactoring
-Kode telah dipecah menjadi beberapa file terpisah tanpa mengubah fungsionalitas atau desain:
-
-### File-file Baru:
-
-1. **AuricHelpers.h/cpp** - Helper functions untuk font dan styling
-   - `makeFont()` - Font helper yang kompatibel dengan JUCE lama/baru (fixed deprecated warning)
-   - `styleLabelGold()` - Styling label dengan warna gold
-   - `trackCaps()` - Tracking untuk brand text
-   - `styleKnobAuric()` - Styling knob dengan parameter Auric
-
-2. **GainReductionMeter.h/cpp** - Komponen meter gain reduction
-   - `GainReductionMeterComponent` class lengkap
-   - Ballistics dan animasi needle
-   - Rendering meter dengan style hardware
-
-3. **AuricLookAndFeel.h/cpp** - Custom Look and Feel
-   - `AuricLookAndFeel` class
-   - Rendering knob, button, dan combo box (fixed unused parameter warning)
-   - Style configuration untuk knob besar/kecil
-
-4. **SegmentedSwitch.h/cpp** - Komponen segmented switch
-   - `SegmentedSwitch3` class
-   - `SegmentedSwitchAttachment` untuk parameter binding
-
-5. **PresetManager.h/cpp** - Manajemen preset
-   - `PresetManager` class
-   - Load/save/delete preset functionality
-   - Directory management
-
-### File yang Diperbarui:
-
-1. **PluginEditor.h** - Header yang sudah dipecah
-   - Hanya berisi class definition dan includes ke file-file baru
-   - Menambahkan `PresetManager` sebagai member
-
-2. **PluginEditor.cpp** - Implementation yang sudah dipecah
-   - Hanya berisi constructor, destructor, paint, resized, dan timer
-   - Menggunakan helper functions dari file-file terpisah
-   - Fixed include path error
-
-3. **AuricOmega76.jucer** - Project file
-   - Menambahkan semua file baru ke dalam project
-
-## Perbaikan yang Dilakukan:
-
-### Perbaikan Teknis:
-1. **Fixed include error** - Memperbaiki `#include "PluginEditor_New.h"` menjadi `#include "PluginEditor.h"`
-2. **Fixed deprecated Font warning** - Menggunakan `FontOptions` untuk JUCE 7+
-3. **Fixed unused parameter warning** - Menghapus nama parameter yang tidak digunakan di `drawRotarySlider`
-
-### Perbaikan Fungsionalitas (Desember 2025):
-4. **LED Indicators Functional** - LED sekarang menunjukkan status routing mode:
-   - LED1: ON saat routing A (compressor) atau Ω (both)
-   - LED2: ON saat routing D (drive) atau Ω (both)
-   - Kedua LED ON saat mode Ω (compressor + drive)
-
-5. **Routing Switch Labels** - Menambahkan label yang jelas:
-   - "A" untuk Compressor mode
-   - "D" untuk Drive mode  
-   - "Ω" untuk Combined mode
-
-6. **Real-time LED Updates** - LED update secara real-time saat user mengubah routing
-
-## Keuntungan Refactoring:
-
-1. **Maintainability** - Setiap komponen sekarang dalam file terpisah
-2. **Readability** - Kode lebih mudah dibaca dan dipahami
-3. **Reusability** - Komponen dapat digunakan kembali di project lain
-4. **Modularity** - Setiap file memiliki tanggung jawab yang jelas
-5. **Testability** - Komponen dapat ditest secara terpisah
-6. **Clean Compilation** - Tidak ada warning atau error
-7. **Hardware Accuracy** - LED indicators sekarang sesuai dengan desain hardware asli
-
-## Struktur File Sekarang:
+## Struktur Folder
 
 ```
 Source/
-├── PluginProcessor.h/cpp     (unchanged)
-├── PluginEditor.h/cpp        (refactored - now ~300 lines with LED functionality)
-├── AuricHelpers.h/cpp        (~50 lines)
-├── GainReductionMeter.h/cpp  (~200 lines)
-├── AuricLookAndFeel.h/cpp    (~1000 lines - comprehensive hardware styling)
-├── SegmentedSwitch.h/cpp     (~150 lines)
-└── PresetManager.h/cpp       (~100 lines)
+├── PluginProcessor.h/cpp     - Audio processing core
+├── PluginEditor.h/cpp        - Main UI editor
+├── AuricHelpers.h/cpp        - Helper functions (font, styling)
+├── AuricKnob.h               - Custom rotary knob component
+├── AuricLookAndFeel.h/cpp    - Custom Look and Feel
+├── GainReductionMeter.h/cpp  - Analog-style GR meter
+├── SegmentedSwitch.h/cpp     - 3-way segmented switch
+└── PresetManager.h/cpp       - Preset load/save/delete
 ```
 
-## Status Kompilasi:
+---
 
-✅ **Semua file berhasil dikompilasi tanpa error atau warning**
-✅ **Tidak ada diagnostic issues**
-✅ **Project siap untuk build**
-✅ **LED functionality terintegrasi dengan baik**
+## Fungsi Setiap File
 
-## Analisis Kesesuaian dengan Desain Hardware:
+### PluginProcessor.h/cpp
+- Audio DSP processing utama
+- Parameter layout (APVTS)
+- Sidechain HPF filter
+- Envelope & gain smoothing
+- State save/load
 
-### ✅ **Yang Sudah Sesuai:**
-- Layout utama sesuai dengan desain target
-- Komponen UI lengkap (knobs, buttons, meter, switches)
-- Fungsionalitas audio DSP lengkap
-- LED indicators sekarang fungsional dan sesuai dengan routing mode
-- Segmented switches dengan label yang jelas
-- Hardware styling yang realistis
+### PluginEditor.h/cpp
+- Main UI window
+- Layout semua komponen
+- Timer untuk meter update
+- LED indicators logic
+- UI scale (S/M/L)
+- Theme colors (`AuricTheme`)
+- Font helpers (`AuricFonts`)
+- `LedComponent` class
 
-### ✅ **Perbaikan yang Telah Dilakukan:**
-- **LED Indicators**: Sekarang menunjukkan status routing secara real-time
-- **Routing Switch**: Label A/D/Ω sudah jelas dan sesuai fungsi
-- **Visual Polish**: Styling hardware yang lebih akurat dan matte finish
-- **Real-time Updates**: LED update langsung saat parameter berubah
+### AuricHelpers.h/cpp
+- `makeFont()` - Font compatible JUCE lama/baru
+- `styleLabelGold()` - Label styling gold
+- `trackCaps()` - Letter spacing untuk brand text
+- `styleKnobAuric()` - Knob styling
 
-## Catatan Penting:
+### AuricKnob.h
+- Custom `Slider` rotary
+- Shift + drag = fine adjust
+- Popup value saat drag
+- Double-click reset
+- `setupAuricKnob()` helper function
 
-- **Tidak ada perubahan fungsionalitas audio** - DSP processing tetap sama
-- **Kompatibilitas terjaga** - Semua parameter dan state management tetap sama
-- **Kode sudah ditest** - Tidak ada diagnostic errors
-- **Build-ready** - Semua compilation issues sudah diperbaiki
-- **Hardware-accurate** - LED dan routing sekarang sesuai dengan desain asli
+### AuricLookAndFeel.h/cpp
+- Custom rendering untuk:
+  - Rotary sliders (knobs)
+  - Toggle buttons
+  - Text buttons
+  - ComboBox
+  - Labels
+  - Popup bubble
+- UI scale support
 
-## Kesimpulan:
+### GainReductionMeter.h/cpp
+- Analog-style VU meter
+- Ballistics (attack/release smoothing)
+- Needle animation
+- Arc scale rendering
 
-Implementasi teknis **SUDAH SESUAI** dengan desain hardware yang ditampilkan. Semua komponen utama sudah ada dan berfungsi dengan baik:
+### SegmentedSwitch.h/cpp
+- `SegmentedSwitch3` - 3-pilihan switch (A/B/C)
+- Optional left legend
+- Optional sub-labels
+- Mouse interaction (hover, click, drag)
+- `SegmentedSwitchAttachment` - Binding ke `AudioParameterChoice`
 
-1. ✅ Input/Release knobs dengan styling hardware realistis
-2. ✅ Gain Reduction meter analog di tengah
-3. ✅ 3 knob kecil (Edge, Mode, Mix) dengan ceramic texture
-4. ✅ LED indicators yang fungsional menunjukkan routing status
-5. ✅ Segmented switches dengan label yang jelas
-6. ✅ Button SC HPF dan PWR dengan hardware styling
-7. ✅ Preset management di header
-8. ✅ Matte black faceplate dengan brushed metal details
+### PresetManager.h/cpp
+- `getPresetDirectory()` - Lokasi preset folder
+- `rebuildPresetMenu()` - Populate ComboBox
+- `loadFactoryDefault()` - Load default preset
+- `loadPresetFile()` - Load dari file
+- `deleteSelectedPreset()` - Hapus preset
 
-Plugin ini siap untuk production dan sesuai dengan desain target yang diinginkan.
+---
 
-Refactoring ini membuat kode lebih terorganisir dan mudah untuk pengembangan selanjutnya, sambil mempertahankan akurasi visual terhadap desain hardware asli.
+## Komponen UI
+
+| Komponen | Class | Fungsi |
+|----------|-------|--------|
+| Input Knob | `AuricKnob` | Input gain |
+| Release Knob | `AuricKnob` | Release time |
+| Edge Knob | `AuricKnob` | Edge/character |
+| Mode Knob | `AuricKnob` | Compression mode |
+| Mix Knob | `AuricKnob` | Dry/wet mix |
+| Omega Mix Knob | `AuricKnob` | Omega blend |
+| GR Meter | `GainReductionMeterComponent` | Gain reduction display |
+| Omega Mode | `SegmentedSwitch3` | A/C/Ω mode |
+| Routing | `SegmentedSwitch3` | A/D/Ω routing |
+| UI Scale | `SegmentedSwitch3` | S/M/L size |
+| SC HPF | `ToggleButton` | Sidechain HPF on/off |
+| PWR | `ToggleButton` | Power on/off |
+| LED 1 & 2 | `LedComponent` | Status indicators |
+| Preset Box | `ComboBox` | Preset selection |
+
+---
+
+## Status
+
+✅ Kompilasi bersih (no warnings/errors)  
+✅ Semua komponen modular  
+✅ Siap untuk build

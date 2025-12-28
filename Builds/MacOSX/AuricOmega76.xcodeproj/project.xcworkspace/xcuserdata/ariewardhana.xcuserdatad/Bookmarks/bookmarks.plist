@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>top-level-items</key>
+	<array>
+		<dict>
+			<key>destination</key>
+			<dict>
+				<key>location-parameters</key>
+				<dict>
+					<key>EndingColumnNumber</key>
+					<string>0</string>
+					<key>EndingLineNumber</key>
+					<string>742</string>
+					<key>StartingColumnNumber</key>
+					<string>0</string>
+					<key>StartingLineNumber</key>
+					<string>742</string>
+					<key>Timestamp</key>
+					<string>788611075.370697</string>
+				</dict>
+				<key>rebasable-url</key>
+				<dict>
+					<key>base</key>
+					<string>home-directory</string>
+					<key>payload</key>
+					<dict>
+						<key>relative-path</key>
+						<string>auric_project/auric-omega76/Source/PluginEditor.cpp</string>
+					</dict>
+				</dict>
+			</dict>
+			<key>text-context</key>
+			<dict>
+				<key>focused</key>
+				<string></string>
+				<key>leading</key>
+				<string>    addAndMakeVisible (scHpfButton);
+    addAndMakeVisible (pwrButton);
+</string>
+				<key>trailing</key>
+				<string>
+    // Info button + overlay
+    infoButton.setButtonText ("i");
+</string>
+			</dict>
+			<key>title</key>
+			<string>Error: No member named 'setFont' in 'juce::ComboBox'</string>
+			<key>type</key>
+			<string>bookmark</string>
+		</dict>
+		<dict>
+			<key>destination</key>
+			<dict>
+				<key>location-parameters</key>
+				<dict>
+					<key>EndingColumnNumber</key>
+					<string>0</string>
+					<key>EndingLineNumber</key>
+					<string>557</string>
+					<key>StartingColumnNumber</key>
+					<string>0</string>
+					<key>StartingLineNumber</key>
+					<string>556</string>
+					<key>Timestamp</key>
+					<string>788612604.793156</string>
+				</dict>
+				<key>rebasable-url</key>
+				<dict>
+					<key>base</key>
+					<string>home-directory</string>
+					<key>payload</key>
+					<dict>
+						<key>relative-path</key>
+						<string>auric_project/auric-omega76/Source/AuricLookAndFeel.cpp</string>
+					</dict>
+				</dict>
+			</dict>
+			<key>text-context</key>
+			<dict>
+				<key>focused</key>
+				<string>            capG.addColour (0.20, capTop.brighter (0.03f));
+</string>
+				<key>leading</key>
+				<string>            ColourGradient capG (capTop, cap.getCentreX(), cap.getY(),
+                                 capBot, cap.getCentreX(), cap.getBottom(), false);
+</string>
+				<key>trailing</key>
+				<string>            capG.addColour (0.55, capTop.interpolatedWith (capBot, 0.5f));
+
+            g.setGradientFill (capG);
+</string>
+			</dict>
+			<key>type</key>
+			<string>bookmark</string>
+		</dict>
+	</array>
+</dict>
+</plist>

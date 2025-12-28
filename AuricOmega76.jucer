@@ -12,10 +12,12 @@
       <FILE id="l2yg8U" name="PluginEditor.cpp" compile="1" resource="0"
             file="Source/PluginEditor.cpp"/>
       <FILE id="SSwcHB" name="PluginEditor.h" compile="0" resource="0" file="Source/PluginEditor.h"/>
-      <FILE id="AH001" name="AuricHelpers.cpp" compile="1" resource="0"
-            file="Source/AuricHelpers.cpp"/>
-      <FILE id="AH002" name="AuricHelpers.h" compile="0" resource="0"
-            file="Source/AuricHelpers.h"/>
+      <FILE id="AH001" name="AuricHelpers.cpp" compile="1" resource="0" file="Source/AuricHelpers.cpp"/>
+      <FILE id="AH002" name="AuricHelpers.h" compile="0" resource="0" file="Source/AuricHelpers.h"/>
+      <FILE id="AVT001" name="AuricValueTooltip.cpp" compile="1" resource="0"
+            file="Source/AuricValueTooltip.cpp"/>
+      <FILE id="AVT002" name="AuricValueTooltip.h" compile="0" resource="0"
+            file="Source/AuricValueTooltip.h"/>
       <FILE id="GRM001" name="GainReductionMeter.cpp" compile="1" resource="0"
             file="Source/GainReductionMeter.cpp"/>
       <FILE id="GRM002" name="GainReductionMeter.h" compile="0" resource="0"
@@ -30,8 +32,7 @@
             file="Source/SegmentedSwitch.h"/>
       <FILE id="PM001" name="PresetManager.cpp" compile="1" resource="0"
             file="Source/PresetManager.cpp"/>
-      <FILE id="PM002" name="PresetManager.h" compile="0" resource="0"
-            file="Source/PresetManager.h"/>
+      <FILE id="PM002" name="PresetManager.h" compile="0" resource="0" file="Source/PresetManager.h"/>
     </GROUP>
   </MAINGROUP>
   <MODULES>
@@ -76,5 +77,27 @@
         <MODULEPATH id="juce_dsp" path="../../JUCE/modules"/>
       </MODULEPATHS>
     </VS2026>
+    <XCODE_MAC targetFolder="Builds/MacOSX">
+      <CONFIGURATIONS>
+        <CONFIGURATION isDebug="1" name="Debug"/>
+        <CONFIGURATION isDebug="0" name="Release"/>
+      </CONFIGURATIONS>
+      <MODULEPATHS>
+        <MODULEPATH id="juce_audio_basics" path="../../juce"/>
+        <MODULEPATH id="juce_audio_devices" path="../../juce"/>
+        <MODULEPATH id="juce_audio_formats" path="../../juce"/>
+        <MODULEPATH id="juce_audio_plugin_client" path="../../juce"/>
+        <MODULEPATH id="juce_audio_processors" path="../../juce"/>
+        <MODULEPATH id="juce_audio_processors_headless" path="../../juce"/>
+        <MODULEPATH id="juce_audio_utils" path="../../juce"/>
+        <MODULEPATH id="juce_core" path="../../juce"/>
+        <MODULEPATH id="juce_data_structures" path="../../juce"/>
+        <MODULEPATH id="juce_dsp" path="../../juce"/>
+        <MODULEPATH id="juce_events" path="../../juce"/>
+        <MODULEPATH id="juce_graphics" path="../../juce"/>
+        <MODULEPATH id="juce_gui_basics" path="../../juce"/>
+        <MODULEPATH id="juce_gui_extra" path="../../juce"/>
+      </MODULEPATHS>
+    </XCODE_MAC>
   </EXPORTFORMATS>
 </JUCERPROJECT>

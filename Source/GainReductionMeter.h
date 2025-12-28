@@ -1,36 +1,40 @@
+//==============================================================================
+// GainReductionMeter.h  (AURIC Ω76) — 1176-ish GR meter (filled, not empty)
+//==============================================================================
+
 #pragma once
 #include <JuceHeader.h>
 
-//==============================================================================
-// GR Meter (clean / no grain)
 class GainReductionMeterComponent : public juce::Component
 {
 public:
-    // GR dB target (pakai nilai positif: 0..20 biasanya)
-    // kalau kamu kirim negatif, aman: akan di-abs dan di-clamp.
-    void setGainReductionDb (float db);
+    GainReductionMeterComponent();
 
-    void setUseBallistics (bool b) { useBallistics = b; }
-
-    // attack/release feel analog (ms)
+    void setGainReductionDb (float db);                 // expects positive GR (0..maxDb)
     void setBallisticsMs (float attackMs, float releaseMs);
+    void setUseBallistics (bool shouldUse) { useBallistics = shouldUse; }
 
-    // panggil dari Timer editor (misal 30Hz / 60Hz)
-    void tick (double rateHz);
-
-    float getCurrentDb() const { return currentDb; }
-    float getTargetDb()  const { return targetDb; }
+    void tick (double hz); // call from editor timer (e.g. 60Hz)
 
     void paint (juce::Graphics& g) override;
+    void resized() override {}
+
+    void setMaxDb (float m) { maxDb = juce::jmax (1.0f, m); repaint(); }
+    float getMaxDb() const  { return maxDb; }
 
 private:
-    bool  useBallistics = true;
+    // ballistics
+    float currentDb = 0.0f;
+    float targetDb  = 0.0f;
 
-    float targetDb  = 0.0f;   // target GR (positive dB)
-    float currentDb = 0.0f;   // smoothed
+    bool  useBallistics  = true;
+    float attackCoeffMs  = 18.0f;
+    float releaseCoeffMs = 180.0f;
 
-    float attackCoeffMs  = 22.0f;
-    float releaseCoeffMs = 140.0f;
+    // look
+    float maxDb = 20.0f;
 
-    juce::Path scaleArc;
+    juce::Image noise; // subtle screen texture
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (GainReductionMeterComponent)
 };

@@ -1,5 +1,10 @@
 //==============================================================================
-// PluginEditor.cpp
+// PluginEditor.cpp  (AURIC Ω76) — HARDWARE FEEL pass
+//  - Background draws ONLY pocket (no double bezel)
+//  - GR meter bounds match pocket opening
+//  - Pocket trimmed + raised slightly (potong atas + meter naik)
+//==============================================================================
+
 #include "PluginEditor.h"
 #include "AuricHelpers.h"
 #include "AuricKnob.h"
@@ -39,11 +44,9 @@ namespace
 
             auto b = getLocalBounds().toFloat();
 
-            // Dim background
             g.setColour (Colour::fromRGBA (0, 0, 0, 150));
             g.fillRect (b);
 
-            // Center panel
             const float panelW = jmin (520.0f, b.getWidth()  * 0.82f);
             const float panelH = jmin (280.0f, b.getHeight() * 0.62f);
 
@@ -54,39 +57,34 @@ namespace
             // Panel fill
             {
                 ColourGradient cg (Colour::fromRGB (28, 28, 28), panel.getX(), panel.getY(),
-                                   Colour::fromRGB (12, 12, 12), panel.getRight(), panel.getBottom(),
-                                   false);
+                                   Colour::fromRGB (12, 12, 12), panel.getRight(), panel.getBottom(), false);
                 cg.addColour (0.35, Colour::fromRGB (20, 20, 20));
                 cg.addColour (0.72, Colour::fromRGB (14, 14, 14));
                 g.setGradientFill (cg);
                 g.fillRoundedRectangle (panel, 14.0f);
             }
 
-            // Border
             g.setColour (Colour::fromRGBA (255, 255, 255, 20));
             g.drawRoundedRectangle (panel, 14.0f, 1.0f);
 
             g.setColour (Colour::fromRGBA (0, 0, 0, 180));
             g.drawRoundedRectangle (panel.reduced (0.8f), 13.0f, 1.8f);
 
-            // Title
             auto inner = panel.reduced (20.0f);
             auto titleArea = inner.removeFromTop (40.0f);
 
             g.setColour (AuricTheme::goldText().withAlpha (0.92f));
-            g.setFont (AuricHelpers::makeFont (20.0f, juce::Font::bold));
+            g.setFont (AuricHelpers::makeFont (20.0f, Font::bold));
             g.drawText (titleText, titleArea, Justification::centredLeft);
 
-            // Divider
             g.setColour (Colour::fromRGBA (255, 255, 255, 12));
             g.drawLine (inner.getX(), titleArea.getBottom() + 6.0f,
                         inner.getRight(), titleArea.getBottom() + 6.0f, 1.0f);
 
             inner.removeFromTop (16.0f);
 
-            // Body
             g.setColour (Colour::fromRGBA (230, 230, 230, 210));
-            g.setFont (AuricHelpers::makeFont (14.0f, juce::Font::plain));
+            g.setFont (AuricHelpers::makeFont (14.0f, Font::plain));
             g.drawFittedText (bodyText, inner.toNearestInt(), Justification::topLeft, 8, 0.95f);
         }
 
@@ -112,10 +110,7 @@ namespace
         std::function<void()> onClose;
 
     private:
-        void buttonClicked (juce::Button*) override
-        {
-            requestClose();
-        }
+        void buttonClicked (juce::Button*) override { requestClose(); }
 
         void requestClose()
         {
@@ -129,6 +124,19 @@ namespace
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CreditsOverlay)
     };
+
+    // IMPORTANT: keep meter pocket math in ONE place (so background + bounds always match)
+    static inline juce::Rectangle<float> makeMeterPocketRect (const LayoutRects& lr)
+    {
+        const float trimTop    = 9.0f * lr.scale;   // potong atas dikit
+        const float trimBottom = 3.0f * lr.scale;   // potong bawah dikit
+        const float raiseY     = 5.0f * lr.scale;   // naikkan pocket sedikit
+
+        return lr.meterHousing
+                .withTrimmedTop (trimTop)
+                .withTrimmedBottom (trimBottom)
+                .translated (0.0f, -raiseY);
+    }
 }
 
 //==============================================================================
@@ -158,7 +166,81 @@ void AuricOmega76AudioProcessorEditor::setupKnobsUx()
     setupAuricKnob (omegaMixKnob, this, 100.0, 200, 3.0f,
                     [] (double v) { return juce::String (v, 0) + " %"; });
     omegaMixKnob.setName ("omega_mix");
+
+    auto hookKnob = [this] (AuricKnob& knob,
+                            const juce::String& valueLabel,
+                            const juce::String& helpText)
+    {
+        knob.setValueTextLabel (valueLabel);
+        knob.setHelpText (helpText);
+
+        knob.onHoverChange = [this] (AuricKnob& k, bool isHovering)
+        {
+            if (isHovering)
+            {
+                showKnobTooltip (k);
+                showHelpText (k.getHelpText());
+            }
+            else
+            {
+                if (! k.isDraggingByMouse())
+                {
+                    hideKnobTooltip();
+                    clearHelpText();
+                }
+            }
+        };
+
+        knob.onDragStart = [this, &knob]
+        {
+            showKnobTooltip (knob);
+            showHelpText (knob.getHelpText());
+        };
+
+        knob.onDragEnd = [this, &knob]
+        {
+            if (! knob.isMouseOverOrDragging())
+            {
+                hideKnobTooltip();
+                clearHelpText();
+            }
+        };
+
+        knob.onValueChange = [this, &knob]
+        {
+            updateKnobTooltip (knob);
+        };
+    };
+
+    hookKnob (inputKnob,   "INPUT", "Drives compression amount");
+    hookKnob (releaseKnob, "RELEASE", "How fast gain recovers");
+    hookKnob (edgeKnob,    omegaChar() + juce::String (" EDGE"), "Adds bite / edge harmonics");
+    hookKnob (modeKnob,    "MODE", "Mode amount");
+    hookKnob (mixKnob,     omegaChar() + juce::String (" MIX"), "Blend harmonic path");
+    hookKnob (omegaMixKnob, omegaChar() + juce::String (" MIX"), "Blend harmonic path");
 }
+
+juce::String AuricOmega76AudioProcessorEditor::formatKnobValueText (AuricKnob& knob) const
+{
+    auto label = knob.getValueTextLabel();
+    auto value = knob.getTextFromValue (knob.getValue());
+    return label.isNotEmpty() ? (label + ": " + value) : value;
+}
+
+void AuricOmega76AudioProcessorEditor::showKnobTooltip (AuricKnob& knob)
+{
+    valueTooltip.showFor (knob, formatKnobValueText (knob));
+}
+
+void AuricOmega76AudioProcessorEditor::updateKnobTooltip (AuricKnob& knob)
+{
+    if (valueTooltip.isShowingFor (&knob))
+        valueTooltip.updateText (formatKnobValueText (knob));
+}
+
+void AuricOmega76AudioProcessorEditor::hideKnobTooltip() { valueTooltip.beginFadeOut(); }
+void AuricOmega76AudioProcessorEditor::showHelpText (const juce::String& text) { helpLine.setText (text); }
+void AuricOmega76AudioProcessorEditor::clearHelpText() { helpLine.setText ({ }); }
 
 //==============================================================================
 // UI scale
@@ -166,16 +248,15 @@ void AuricOmega76AudioProcessorEditor::applyUIScale (int idx)
 {
     uiScaleIndex = juce::jlimit (0, 2, idx);
 
-    struct S { int w, h; };
-    const S sizes[3] =
-    {
-        {  920, 510 },  // S
-        { 1040, 570 },  // M
-        { 1120, 620 }   // L
-    };
+    constexpr float baseW = LayoutRects::designW;
+    constexpr float baseH = LayoutRects::designH;
+    const float scales[3] = { 0.85f, 1.0f, 1.15f };
 
-    setSize (sizes[uiScaleIndex].w, sizes[uiScaleIndex].h);
+    const float s = scales[uiScaleIndex];
+    setSize ((int) std::round (baseW * s), (int) std::round (baseH * s));
+
     auricLnf.uiScaleIndex = uiScaleIndex;
+    auricLnf.uiScale = s;
 
     resized();
     bgDirty = true;
@@ -192,10 +273,7 @@ void AuricOmega76AudioProcessorEditor::rebuildNoiseTile()
     noiseTile = juce::Image (juce::Image::RGB, W, H, true);
     juce::Random rng (0xA0C176u);
 
-    auto clampU8 = [] (int v) -> juce::uint8
-    {
-        return (juce::uint8) juce::jlimit (0, 255, v);
-    };
+    auto clampU8 = [] (int v) -> juce::uint8 { return (juce::uint8) juce::jlimit (0, 255, v); };
 
     for (int y = 0; y < H; ++y)
         for (int x = 0; x < W; ++x)
@@ -219,7 +297,7 @@ void AuricOmega76AudioProcessorEditor::rebuildNoiseTile()
 }
 
 //==============================================================================
-// Background cache render (matte hardware + screws + meter bevel)
+// Background cache render
 void AuricOmega76AudioProcessorEditor::rebuildBackground()
 {
     using namespace juce;
@@ -231,213 +309,172 @@ void AuricOmega76AudioProcessorEditor::rebuildBackground()
     Graphics g (bgCache);
     g.setImageResamplingQuality (Graphics::highResamplingQuality);
 
-    const Rectangle<float> r (0.0f, 0.0f, (float) W, (float) H);
+    const Rectangle<float> bounds (0.0f, 0.0f, (float) W, (float) H);
+    const auto lr = LayoutRects::make (bounds);
 
-    auto addBrushed = [&] (Rectangle<float> rr, float alpha, float stepPx, bool horizontal)
+    g.fillAll (AuricTheme::panelDark());
+
+    // Base panel gradient
     {
-        Graphics::ScopedSaveState ss (g);
-        g.reduceClipRegion (rr.toNearestInt());
-
-        Random rng (0xC0FFEEu);
-        g.setColour (Colour::fromRGBA (255, 255, 255,
-                                       (uint8) jlimit (0, 255, (int) (alpha * 255.0f))));
-
-        if (horizontal)
-        {
-            for (float y = rr.getY() + 1.0f; y < rr.getBottom() - 1.0f; y += stepPx)
-            {
-                const float wob = 0.30f * std::sin (y * 0.22f) + (rng.nextFloat() - 0.5f) * 0.18f;
-                g.drawLine (rr.getX() + 1.0f, y + wob, rr.getRight() - 1.0f, y + wob, 1.0f);
-            }
-        }
-        else
-        {
-            for (float x = rr.getX() + 1.0f; x < rr.getRight() - 1.0f; x += stepPx)
-            {
-                const float wob = 0.30f * std::sin (x * 0.22f) + (rng.nextFloat() - 0.5f) * 0.18f;
-                g.drawLine (x + wob, rr.getY() + 1.0f, x + wob, rr.getBottom() - 1.0f, 1.0f);
-            }
-        }
-    };
-
-    auto vignette = [&] (Rectangle<float> rr, float strength)
-    {
-        Path p; p.addRectangle (rr);
-
-        ColourGradient vg (Colour::fromRGBA (0, 0, 0, 0),
-                           rr.getCentreX(), rr.getCentreY(),
-                           Colour::fromRGBA (0, 0, 0, (uint8) (140.0f * strength)),
-                           rr.getCentreX(), rr.getCentreY(),
-                           true);
-
-        vg.addColour (0.62, Colour::fromRGBA (0, 0, 0, 0));
-        vg.addColour (1.00, Colour::fromRGBA (0, 0, 0, (uint8) (175.0f * strength)));
-
-        g.setGradientFill (vg);
-        g.fillPath (p);
-    };
-
-    auto drawScrew = [&] (Point<float> c, float rad)
-    {
-        g.setColour (Colour::fromRGBA (0,0,0,170));
-        g.fillEllipse (c.x - rad - 1.2f, c.y - rad + 0.8f, (rad + 1.2f) * 2.0f, (rad + 1.2f) * 2.0f);
-
-        ColourGradient cg (Colour::fromRGB (26,26,26), c.x - rad, c.y - rad,
-                           Colour::fromRGB (8,8,8),   c.x + rad, c.y + rad, false);
-        cg.addColour (0.55, Colour::fromRGB (14,14,14));
-        g.setGradientFill (cg);
-        g.fillEllipse (c.x - rad, c.y - rad, rad * 2.0f, rad * 2.0f);
-
-        g.setColour (Colour::fromRGBA (255,255,255,16));
-        g.drawEllipse (c.x - rad + 0.6f, c.y - rad + 0.6f, (rad - 0.6f) * 2.0f, (rad - 0.6f) * 2.0f, 1.0f);
-
-        g.setColour (Colour::fromRGBA (0,0,0,200));
-        g.drawLine (c.x - rad * 0.55f, c.y, c.x + rad * 0.55f, c.y, 2.0f);
-        g.setColour (Colour::fromRGBA (255,255,255,10));
-        g.drawLine (c.x - rad * 0.50f, c.y - 0.6f, c.x + rad * 0.50f, c.y - 0.6f, 1.0f);
-    };
-
-    // 1) BASE MATTE BLACK METAL
-    {
-        g.fillAll (Colour::fromRGB (10, 10, 10));
-
-        ColourGradient baseG (Colour::fromRGB (22, 21, 20), r.getX(), r.getY(),
-                              Colour::fromRGB (7,  7,  7),  r.getRight(), r.getBottom(),
-                              false);
-        baseG.addColour (0.38, Colour::fromRGB (14, 14, 14));
-        baseG.addColour (0.72, Colour::fromRGB (9,  9,  9));
-        g.setGradientFill (baseG);
-        g.fillRect (r);
-
-        // header wash
-        Rectangle<float> hdr = r.withHeight (r.getHeight() * 0.14f);
-        ColourGradient wash (Colour::fromRGBA (255, 210, 120, 10),
-                             hdr.getCentreX(), hdr.getY(),
-                             Colour::fromRGBA (0, 0, 0, 0),
-                             hdr.getCentreX(), hdr.getBottom(),
-                             false);
-        wash.addColour (0.55, Colour::fromRGBA (255, 210, 120, 4));
-        g.setGradientFill (wash);
-        g.fillRect (hdr);
-
-        addBrushed (r.reduced (2.0f), 0.012f, 6.5f, true);
-        vignette (r, 0.45f);
+        ColourGradient base (AuricTheme::panelHighlight().withAlpha (0.96f),
+                             lr.ui.getCentreX(), lr.ui.getY(),
+                             AuricTheme::panelDark().darker (0.28f),
+                             lr.ui.getCentreX(), lr.ui.getBottom(), false);
+        base.addColour (0.45, AuricTheme::panelBase());
+        g.setGradientFill (base);
+        g.fillRect (lr.ui);
     }
 
-    // 2) NOISE overlay skip meter area
+    // Micro texture (low)
+    if (noiseTile.isValid())
     {
-        const Rectangle<int> meterI = grMeter.getBounds();
-        const float noiseAlpha = 0.032f;
+        Graphics::ScopedSaveState ss (g);
+        g.reduceClipRegion (lr.ui.toNearestInt());
 
-        auto drawNoiseTiled = [&] ()
-        {
-            if (! noiseTile.isValid())
-                return;
-
-            for (int yy = 0; yy < H; yy += noiseTile.getHeight())
-                for (int xx = 0; xx < W; xx += noiseTile.getWidth())
-                    g.drawImageAt (noiseTile, xx, yy);
-        };
-
-        g.setOpacity (noiseAlpha);
-
-        { Graphics::ScopedSaveState ss (g);
-          g.reduceClipRegion (Rectangle<int> (0, 0, W, jmax (0, meterI.getY())));
-          drawNoiseTiled(); }
-
-        { Graphics::ScopedSaveState ss (g);
-          g.reduceClipRegion (Rectangle<int> (0, meterI.getBottom(), W, jmax (0, H - meterI.getBottom())));
-          drawNoiseTiled(); }
-
-        { Graphics::ScopedSaveState ss (g);
-          g.reduceClipRegion (Rectangle<int> (0, meterI.getY(), jmax (0, meterI.getX()), meterI.getHeight()));
-          drawNoiseTiled(); }
-
-        { Graphics::ScopedSaveState ss (g);
-          g.reduceClipRegion (Rectangle<int> (meterI.getRight(), meterI.getY(),
-                                             jmax (0, W - meterI.getRight()), meterI.getHeight()));
-          drawNoiseTiled(); }
-
+        auto xf = AffineTransform::scale (1.65f, 1.65f);
+        g.setFillType (FillType (noiseTile, xf));
+        g.setOpacity (0.055f);
+        g.fillRect (lr.ui);
         g.setOpacity (1.0f);
     }
 
-    // 3) Meter bezel
+    // Soft top highlight
     {
-        auto meter = grMeter.getBounds().toFloat().expanded (6.0f, 6.0f);
-
-        g.setColour (Colour::fromRGBA (0,0,0,130));
-        g.fillRoundedRectangle (meter.translated (0.0f, 1.4f), 16.0f);
-
-        ColourGradient bezel (Colour::fromRGB (35,35,35), meter.getX(), meter.getY(),
-                              Colour::fromRGB (7,7,7),   meter.getRight(), meter.getBottom(), false);
-        bezel.addColour (0.55, Colour::fromRGB (18,18,18));
-        g.setGradientFill (bezel);
-        g.fillRoundedRectangle (meter, 16.0f);
-
-        g.setColour (Colour::fromRGBA (255,255,255,14));
-        g.drawRoundedRectangle (meter.reduced (0.6f), 15.0f, 1.0f);
-
-        g.setColour (Colour::fromRGBA (0,0,0,210));
-        g.drawRoundedRectangle (meter.reduced (1.4f), 14.0f, 1.6f);
+        auto top = lr.ui.withHeight (lr.ui.getHeight() * 0.18f);
+        ColourGradient wash (Colour::fromRGBA (255, 232, 190, 16),
+                             top.getCentreX(), top.getY(),
+                             Colour::fromRGBA (0, 0, 0, 0),
+                             top.getCentreX(), top.getBottom(), false);
+        wash.addColour (0.55, Colour::fromRGBA (255, 232, 190, 6));
+        g.setGradientFill (wash);
+        g.fillRect (top);
     }
 
-    // 4) Frame + screws
+    // Bottom tint
     {
-        g.setColour (Colour::fromRGBA (255, 255, 255, 7));
-        g.drawRect (Rectangle<int> (1, 1, W - 2, H - 2), 1);
-
-        g.setColour (Colour::fromRGBA (0, 0, 0, 190));
-        g.drawRect (Rectangle<int> (0, 0, W, H), 2);
-
-        const float srad = jlimit (6.0f, 10.0f, jmin ((float)W, (float)H) * 0.012f);
-        const float pad  = 18.0f;
-
-        drawScrew ({ pad, pad }, srad);
-        drawScrew ({ r.getRight() - pad, pad }, srad);
-        drawScrew ({ pad, r.getBottom() - pad }, srad);
-        drawScrew ({ r.getRight() - pad, r.getBottom() - pad }, srad);
+        auto bottom = lr.ui.withTrimmedTop (lr.separatorY - lr.ui.getY());
+        ColourGradient bot (AuricTheme::panelBase().darker (0.10f),
+                            bottom.getCentreX(), bottom.getY(),
+                            AuricTheme::panelDark().darker (0.38f),
+                            bottom.getCentreX(), bottom.getBottom(), false);
+        bot.addColour (0.45, AuricTheme::panelBase().darker (0.20f));
+        g.setGradientFill (bot);
+        g.fillRect (bottom);
     }
+
+    // Tone group panel
+    {
+        auto panel = lr.toneGroupPanel;
+        const float rr = 12.0f * lr.scale;
+
+        ColourGradient tg (AuricTheme::panelHighlight().withAlpha (0.11f),
+                           panel.getCentreX(), panel.getY(),
+                           AuricTheme::panelDark().withAlpha (0.16f),
+                           panel.getCentreX(), panel.getBottom(), false);
+        tg.addColour (0.55, AuricTheme::panelBase().withAlpha (0.10f));
+        g.setGradientFill (tg);
+        g.fillRoundedRectangle (panel, rr);
+
+        g.setColour (Colour::fromRGBA (255, 255, 255, 9));
+        g.drawRoundedRectangle (panel.reduced (0.6f), rr, 1.0f);
+
+        g.setColour (Colour::fromRGBA (0, 0, 0, 125));
+        g.drawRoundedRectangle (panel.reduced (1.6f), rr - 1.0f, 1.2f);
+    }
+
+    // Panel separator (bevel)
+    {
+        const float x1 = lr.ui.getX() + 24.0f * lr.scale;
+        const float x2 = lr.ui.getRight() - 24.0f * lr.scale;
+
+        g.setColour (Colour::fromRGBA (255, 255, 255, 12));
+        g.drawLine (x1, lr.separatorY, x2, lr.separatorY, 1.0f);
+
+        g.setColour (Colour::fromRGBA (0, 0, 0, 195));
+        g.drawLine (x1, lr.separatorY + 1.3f * lr.scale,
+                    x2, lr.separatorY + 1.3f * lr.scale, 1.3f);
+    }
+
+    //==============================================================================
+    // METER POCKET ONLY (trim + raise)
+    //==============================================================================
+    {
+        auto pocket = makeMeterPocketRect (lr);
+        const float rr = 14.0f * lr.scale;
+
+        g.setColour (Colour::fromRGBA (0, 0, 0, 185));
+        g.fillRoundedRectangle (pocket.expanded (3.0f * lr.scale)
+                                .translated (0.0f, 2.2f * lr.scale),
+                                rr + 3.2f * lr.scale);
+
+        AuricHelpers::drawInsetWell (g, pocket, rr, 4.0f * lr.scale);
+
+        g.setColour (Colour::fromRGBA (255, 255, 255, 10));
+        g.drawRoundedRectangle (pocket.reduced (0.6f), rr - 0.6f, 1.0f);
+
+        g.setColour (Colour::fromRGBA (0, 0, 0, 200));
+        g.drawRoundedRectangle (pocket.reduced (1.5f), rr - 1.2f, 1.2f);
+
+        const float y = pocket.getY() + 0.9f * lr.scale;
+        g.setColour (AuricTheme::goldTextHi().withAlpha (0.10f));
+        g.drawLine (pocket.getX() + 10.0f * lr.scale, y,
+                    pocket.getRight() - 10.0f * lr.scale, y, 1.0f);
+    }
+
+
+
+    // Frame + vignette/noise
+    g.setColour (Colour::fromRGBA (0, 0, 0, 195));
+    g.drawRect (lr.ui.toNearestInt(), 2);
+
+    AuricHelpers::drawVignetteNoiseOverlay (g, lr.ui, 0.32f);
 
     bgDirty = false;
 }
 
 //==============================================================================
-// Editor ctor
+// Ctor / Dtor
 AuricOmega76AudioProcessorEditor::AuricOmega76AudioProcessorEditor (AuricOmega76AudioProcessor& p)
     : AudioProcessorEditor (&p), audioProcessor (p), presetManager (p)
 {
     setLookAndFeel (&auricLnf);
-
     rebuildNoiseTile();
 
     // Labels
     titleLabel.setText (AuricHelpers::trackCaps ("AURIC"), juce::dontSendNotification);
-    presetLabel.setText ("Preset", juce::dontSendNotification);
+    presetLabel.setText (AuricHelpers::trackCaps ("PRESET"), juce::dontSendNotification);
 
-    inputLabel.setText ("INPUT", juce::dontSendNotification);
-    releaseLabel.setText ("RELEASE", juce::dontSendNotification);
+    inputLabel.setText (AuricHelpers::trackCaps ("INPUT"), juce::dontSendNotification);
+    releaseLabel.setText (AuricHelpers::trackCaps ("RELEASE"), juce::dontSendNotification);
 
-    edgeLabel.setText (omegaChar() + juce::String (" EDGE"), juce::dontSendNotification);
-    modeLabel.setText ("MODE", juce::dontSendNotification);
-    mixLabel .setText (omegaChar() + juce::String (" MIX"),  juce::dontSendNotification);
-    omegaMixLabel.setText (omegaChar() + juce::String (" MIX"), juce::dontSendNotification);
+    edgeLabel.setText (omegaChar() + " " + AuricHelpers::trackCaps ("EDGE"), juce::dontSendNotification);
+    modeLabel.setText (AuricHelpers::trackCaps ("MODE"), juce::dontSendNotification);
+    mixLabel .setText (omegaChar() + " " + AuricHelpers::trackCaps ("MIX"), juce::dontSendNotification);
+    omegaMixLabel.setText (omegaChar() + " " + AuricHelpers::trackCaps ("MIX"), juce::dontSendNotification);
 
-    AuricHelpers::styleLabelGold (titleLabel, 24.0f, true, false);
-    titleLabel.setColour (juce::Label::textColourId, AuricTheme::goldText().withAlpha (0.92f));
+    toneGroupLabel.setText ("TONE / CHARACTER", juce::dontSendNotification);
 
-    AuricHelpers::styleLabelGold (presetLabel, 13.0f);
-    AuricHelpers::styleLabelGold (inputLabel, 12.5f);
-    AuricHelpers::styleLabelGold (releaseLabel, 12.5f);
-    AuricHelpers::styleLabelGold (edgeLabel, 12.0f);
-    AuricHelpers::styleLabelGold (modeLabel, 12.0f);
-    AuricHelpers::styleLabelGold (mixLabel,  12.0f);
-    AuricHelpers::styleLabelGold (omegaMixLabel, 12.0f);
+    AuricHelpers::styleLabelGold (titleLabel, 24.0f, true, false, 2.0f);
+    titleLabel.setColour (juce::Label::textColourId, AuricTheme::goldTextHi().withAlpha (0.95f));
+
+    AuricHelpers::styleLabelGold (presetLabel, 13.0f, false, false, 1.1f);
+    AuricHelpers::styleLabelGold (inputLabel,  13.5f, false, true,  0.9f);
+    AuricHelpers::styleLabelGold (releaseLabel,13.5f, false, true,  0.9f);
+    AuricHelpers::styleLabelGold (edgeLabel,   12.0f, false, true,  0.8f);
+    AuricHelpers::styleLabelGold (modeLabel,   12.0f, false, true,  0.8f);
+    AuricHelpers::styleLabelGold (mixLabel,    12.0f, false, true,  0.8f);
+    AuricHelpers::styleLabelGold (omegaMixLabel,12.0f,false, true,  0.8f);
+    AuricHelpers::styleLabelGold (toneGroupLabel,11.0f,false, true,  1.0f);
+
+    inputLabel.setColour (juce::Label::textColourId, AuricTheme::goldTextHi().withAlpha (0.96f));
+    releaseLabel.setColour (juce::Label::textColourId, AuricTheme::goldTextHi().withAlpha (0.96f));
+    toneGroupLabel.setColour (juce::Label::textColourId, AuricTheme::goldTextDim().withAlpha (0.86f));
 
     inputLabel.setJustificationType (juce::Justification::centred);
     releaseLabel.setJustificationType (juce::Justification::centred);
     edgeLabel.setJustificationType (juce::Justification::centred);
     modeLabel.setJustificationType (juce::Justification::centred);
-    mixLabel .setJustificationType (juce::Justification::centred);
+    mixLabel.setJustificationType (juce::Justification::centred);
     omegaMixLabel.setJustificationType (juce::Justification::centred);
 
     addAndMakeVisible (titleLabel);
@@ -448,17 +485,38 @@ AuricOmega76AudioProcessorEditor::AuricOmega76AudioProcessorEditor (AuricOmega76
     addAndMakeVisible (modeLabel);
     addAndMakeVisible (mixLabel);
     addAndMakeVisible (omegaMixLabel);
+    addAndMakeVisible (toneGroupLabel);
 
-    // LEDs
-    addAndMakeVisible (led1);
-    addAndMakeVisible (led2);
-
-    // Segmented setup
+    // Segmented
     omegaModeSwitch.setLeftLegend (juce::String::fromUTF8 (u8"\u03A9"), "MODE", true);
     omegaModeSwitch.setSubLabels ("CLEAN", "IRON", "GRIT");
 
     routingSwitch.setDrawLeftLegend (false);
     routingSwitch.setSubLabels ("A", "D", juce::String::fromUTF8 (u8"\u03A9"));
+
+    omegaModeHelpText = "Tone character";
+    omegaModeSegmentHelp[0] = "Clean";
+    omegaModeSegmentHelp[1] = "Iron";
+    omegaModeSegmentHelp[2] = "Grit";
+
+    routingHelpText = "Routing mode";
+    routingSegmentHelp[0] = "Analog path";
+    routingSegmentHelp[1] = "Digital path";
+    routingSegmentHelp[2] = omegaChar() + " path";
+
+    omegaModeSwitch.onHover = [this] (int idx)
+    {
+        if (idx == -1) { clearHelpText(); return; }
+        if (idx >= 0 && idx < 3 && omegaModeSegmentHelp[idx].isNotEmpty()) { showHelpText (omegaModeSegmentHelp[idx]); return; }
+        showHelpText (omegaModeHelpText);
+    };
+
+    routingSwitch.onHover = [this] (int idx)
+    {
+        if (idx == -1) { clearHelpText(); return; }
+        if (idx >= 0 && idx < 3 && routingSegmentHelp[idx].isNotEmpty()) { showHelpText (routingSegmentHelp[idx]); return; }
+        showHelpText (routingHelpText);
+    };
 
     // Preset UI
     presetBox.setTextWhenNothingSelected ("DEFAULT");
@@ -467,14 +525,28 @@ AuricOmega76AudioProcessorEditor::AuricOmega76AudioProcessorEditor (AuricOmega76
     presetBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0x00000000));
     presetBox.setColour (juce::ComboBox::outlineColourId, juce::Colour (0x00000000));
     presetBox.setColour (juce::ComboBox::buttonColourId, juce::Colour (0x00000000));
+    presetBox.setComponentID ("hdr_preset_box");
     addAndMakeVisible (presetBox);
+
+    qualityBox.setTextWhenNothingSelected (omegaChar() + " Auto");
+    qualityBox.setJustificationType (juce::Justification::centredLeft);
+    qualityBox.setColour (juce::ComboBox::textColourId, AuricTheme::goldText().withAlpha (0.88f));
+    qualityBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0x00000000));
+    qualityBox.setColour (juce::ComboBox::outlineColourId, juce::Colour (0x00000000));
+    qualityBox.setColour (juce::ComboBox::buttonColourId, juce::Colour (0x00000000));
+    qualityBox.setComponentID ("hdr_quality_box");
+
+    qualityBox.addItem (omegaChar() + " Auto", 1);
+    qualityBox.addItem ("O1 x1", 2);
+    qualityBox.addItem ("O3 x2", 3);
+    qualityBox.addItem ("O3 x4", 4);
+    qualityBox.setSelectedId (1, juce::dontSendNotification);
+    addAndMakeVisible (qualityBox);
 
     addAndMakeVisible (presetSaveButton);
     addAndMakeVisible (presetLoadButton);
     addAndMakeVisible (presetDeleteButton);
 
-    // Header IDs
-    presetBox.setComponentID ("hdr_preset_box");
     presetSaveButton.setComponentID   ("hdr_btn");
     presetLoadButton.setComponentID   ("hdr_btn");
     presetDeleteButton.setComponentID ("hdr_btn");
@@ -568,7 +640,7 @@ AuricOmega76AudioProcessorEditor::AuricOmega76AudioProcessorEditor (AuricOmega76
         repaint();
     };
 
-    // Sliders/Knobs
+    // Knobs
     AuricHelpers::styleKnobAuric (inputKnob);
     AuricHelpers::styleKnobAuric (releaseKnob);
     AuricHelpers::styleKnobAuric (edgeKnob);
@@ -583,10 +655,9 @@ AuricOmega76AudioProcessorEditor::AuricOmega76AudioProcessorEditor (AuricOmega76
     addAndMakeVisible (mixKnob);
     addAndMakeVisible (omegaMixKnob);
 
-    // UX PRO knobs
     setupKnobsUx();
 
-    // Buttons
+    // Buttons (hardware)
     scHpfButton.setButtonText ("SC HPF");
     pwrButton.setButtonText ("PWR");
     scHpfButton.setClickingTogglesState (true);
@@ -595,6 +666,21 @@ AuricOmega76AudioProcessorEditor::AuricOmega76AudioProcessorEditor (AuricOmega76
     pwrButton.setComponentID   ("hw_pwr");
     scHpfButton.setWantsKeyboardFocus (false);
     pwrButton.setWantsKeyboardFocus   (false);
+
+    scHpfButton.setHelpText ("Filters sidechain low end");
+    pwrButton.setHelpText ("Power / bypass");
+
+    scHpfButton.onHoverChange = [this] (AuricHelpToggleButton& b, bool isHovering)
+    {
+        if (isHovering) showHelpText (b.getHelpText());
+        else            clearHelpText();
+    };
+    pwrButton.onHoverChange = [this] (AuricHelpToggleButton& b, bool isHovering)
+    {
+        if (isHovering) showHelpText (b.getHelpText());
+        else            clearHelpText();
+    };
+
     addAndMakeVisible (scHpfButton);
     addAndMakeVisible (pwrButton);
 
@@ -624,8 +710,7 @@ AuricOmega76AudioProcessorEditor::AuricOmega76AudioProcessorEditor (AuricOmega76
 
     infoButton.onClick = [this]
     {
-        if (! creditsOverlay)
-            return;
+        if (! creditsOverlay) return;
 
         const bool show = ! creditsOverlay->isVisible();
         creditsOverlay->setBounds (getLocalBounds());
@@ -637,19 +722,20 @@ AuricOmega76AudioProcessorEditor::AuricOmega76AudioProcessorEditor (AuricOmega76
         repaint();
     };
 
-    // Segmented
+    // Segmented + scale switch
     addAndMakeVisible (omegaModeSwitch);
     addAndMakeVisible (routingSwitch);
-
-    routingSwitch.onChange = [this] (int) { updateLEDIndicators(); };
 
     addAndMakeVisible (uiScaleSwitch);
     uiScaleSwitch.onChange = [this] (int idx) { applyUIScale (idx); };
 
     // Meter
     grMeter.setUseBallistics (true);
-    grMeter.setBallisticsMs (22.0f, 140.0f);
+    grMeter.setBallisticsMs (18.0f, 180.0f);
     addAndMakeVisible (grMeter);
+
+    addAndMakeVisible (helpLine);
+    addChildComponent (valueTooltip);
 
     // Attachments
     auto& apvts = audioProcessor.apvts;
@@ -665,18 +751,22 @@ AuricOmega76AudioProcessorEditor::AuricOmega76AudioProcessorEditor (AuricOmega76
 
     omegaModeAtt = std::make_unique<SegmentedSwitchAttachment> (apvts, "omega_mode", omegaModeSwitch);
     routingAtt   = std::make_unique<SegmentedSwitchAttachment> (apvts, "routing",    routingSwitch);
-
-    updateLEDIndicators();
+    qualityAtt   = std::make_unique<APVTS::ComboBoxAttachment> (apvts, "quality", qualityBox);
 
     // Resizable
     setResizable (true, true);
-    setResizeLimits (860, 470, 1600, 900);
+    {
+        const float scales[3] = { 0.85f, 1.0f, 1.15f };
+        setResizeLimits ((int) std::round (LayoutRects::designW * scales[0]),
+                         (int) std::round (LayoutRects::designH * scales[0]),
+                         (int) std::round (LayoutRects::designW * scales[2]),
+                         (int) std::round (LayoutRects::designH * scales[2]));
+    }
 
-    // Default scale (M)
     uiScaleSwitch.setSelectedIndex (1);
     applyUIScale (1);
 
-    startTimerHz (30);
+    startTimerHz (60);
 }
 
 AuricOmega76AudioProcessorEditor::~AuricOmega76AudioProcessorEditor()
@@ -693,9 +783,7 @@ void AuricOmega76AudioProcessorEditor::timerCallback()
 {
     const float gr = audioProcessor.getGainReductionDb();
     grMeter.setGainReductionDb (gr);
-    grMeter.tick (30.0);
-
-    updateLEDIndicators();
+    grMeter.tick (60.0);
 }
 
 //==============================================================================
@@ -703,7 +791,7 @@ void AuricOmega76AudioProcessorEditor::timerCallback()
 void AuricOmega76AudioProcessorEditor::paint (juce::Graphics& g)
 {
     if (bgDirty || ! bgCache.isValid()
-        || bgCache.getWidth() != getWidth()
+        || bgCache.getWidth()  != getWidth()
         || bgCache.getHeight() != getHeight())
     {
         rebuildBackground();
@@ -718,133 +806,77 @@ void AuricOmega76AudioProcessorEditor::resized()
 {
     using namespace juce;
 
-    constexpr float baseW = 1120.0f;
-    constexpr float baseH = 620.0f;
+    auto lr = LayoutRects::make (getLocalBounds().toFloat());
+    auricLnf.uiScale = lr.scale;
 
-    auto bounds = getLocalBounds().toFloat();
+    auto toInt = [] (Rectangle<float> r) { return r.toNearestInt(); };
 
-    const float sx = bounds.getWidth()  / baseW;
-    const float sy = bounds.getHeight() / baseH;
-    const float s  = jmin (sx, sy);
+    // Header
+    titleLabel.setBounds (toInt (lr.brand));
+    presetLabel.setBounds (toInt (lr.presetLabel));
+    presetBox.setBounds (toInt (lr.presetBox));
+    qualityBox.setBounds (toInt (lr.qualityBox));
 
-    Rectangle<float> ui (0, 0, baseW * s, baseH * s);
-    ui.setCentre (bounds.getCentre());
+    presetSaveButton.setBounds (toInt (lr.presetSaveButton));
+    presetLoadButton.setBounds (toInt (lr.presetLoadButton));
+    presetDeleteButton.setBounds (toInt (lr.presetDeleteButton));
+    infoButton.setBounds (toInt (lr.infoButton));
+    uiScaleSwitch.setBounds (toInt (lr.uiScaleSwitch));
 
-    auto R = [&] (float x, float y, float w, float h)
-    {
-        return Rectangle<int> ((int) std::round (ui.getX() + x * s),
-                               (int) std::round (ui.getY() + y * s),
-                               (int) std::round (w * s),
-                               (int) std::round (h * s));
-    };
+    // Main row
+    inputKnob.setBounds (toInt (lr.inputKnob));
+    releaseKnob.setBounds (toInt (lr.releaseKnob));
 
-    // HEADER
-    titleLabel.setBounds (R (14, 10, 210, 34));
+    // Meter bounds MUST match pocket opening
+    grMeter.setBounds (makeMeterPocketRect (lr).toNearestInt());
 
-    presetLabel.setBounds (R (240, 18, 60, 18));
-    presetBox.setBounds   (R (302, 12, 360, 28));
+    helpLine.setBounds (toInt (lr.helpLine));
 
-    presetSaveButton.setBounds   (R (670, 12, 54, 28));
-    presetLoadButton.setBounds   (R (730, 12, 54, 28));
-    presetDeleteButton.setBounds (R (790, 12, 46, 28));
+    inputLabel.setBounds (toInt (lr.inputLabel));
+    releaseLabel.setBounds (toInt (lr.releaseLabel));
 
-    infoButton.setBounds    (R (842, 12, 30, 28));
-    uiScaleSwitch.setBounds (R (878, 14, 120, 24));
+    scHpfButton.setBounds (toInt (lr.scHpfButton));
+    pwrButton.setBounds (toInt (lr.pwrButton));
 
-    // MAIN ROW
-    inputKnob.setBounds   (R (55,  86, 230, 230));
-    releaseKnob.setBounds (R (835, 86, 230, 230));
-    grMeter.setBounds     (R (380, 94, 360, 220));
+    // Mid knobs
+    edgeKnob.setBounds (toInt (lr.edgeKnob));
+    modeKnob.setBounds (toInt (lr.modeKnob));
+    mixKnob.setBounds  (toInt (lr.mixKnob));
 
-    inputLabel.setBounds   (R (55,  320, 230, 18));
-    releaseLabel.setBounds (R (835, 320, 230, 18));
+    edgeLabel.setBounds (toInt (lr.edgeLabel));
+    modeLabel.setBounds (toInt (lr.modeLabel));
+    mixLabel.setBounds  (toInt (lr.mixLabel));
+    toneGroupLabel.setBounds (toInt (lr.toneGroupLabel));
 
-    scHpfButton.setBounds (R (40,  344, 260, 34));
-    pwrButton.setBounds   (R (820, 344, 260, 34));
+    // Bottom
+    omegaMixKnob.setBounds (toInt (lr.omegaMixKnob));
+    omegaMixLabel.setBounds (toInt (lr.omegaMixLabel));
 
-    // CENTER SMALL KNOBS
-    edgeKnob.setBounds (R (420, 386, 88, 88));
-    modeKnob.setBounds (R (516, 386, 88, 88));
-    mixKnob .setBounds (R (612, 386, 88, 88));
+    omegaModeSwitch.setBounds (toInt (lr.omegaModeSwitch));
+    routingSwitch.setBounds (toInt (lr.routingSwitch));
 
-    edgeLabel.setBounds (R (390, 486, 148, 20));
-    modeLabel.setBounds (R (486, 486, 148, 20));
-    mixLabel .setBounds (R (582, 486, 148, 20));
+    // Scale fonts
+    AuricHelpers::styleLabelGold (titleLabel, 24.0f * lr.scale, true, false, 2.0f * lr.scale);
+    titleLabel.setColour (Label::textColourId, AuricTheme::goldTextHi().withAlpha (0.95f));
 
-    // BOTTOM
-    const float mL = 34.0f;
-    const float mR = 34.0f;
-    const float mB = 20.0f;
+    AuricHelpers::styleLabelGold (presetLabel,  13.0f * lr.scale, false, false, 1.1f * lr.scale);
+    AuricHelpers::styleLabelGold (inputLabel,   13.5f * lr.scale, false, true,  0.9f * lr.scale);
+    AuricHelpers::styleLabelGold (releaseLabel, 13.5f * lr.scale, false, true,  0.9f * lr.scale);
+    AuricHelpers::styleLabelGold (edgeLabel,    12.0f * lr.scale, false, true,  0.8f * lr.scale);
+    AuricHelpers::styleLabelGold (modeLabel,    12.0f * lr.scale, false, true,  0.8f * lr.scale);
+    AuricHelpers::styleLabelGold (mixLabel,     12.0f * lr.scale, false, true,  0.8f * lr.scale);
+    AuricHelpers::styleLabelGold (omegaMixLabel,11.0f * lr.scale, false, true,  0.8f * lr.scale);
+    AuricHelpers::styleLabelGold (toneGroupLabel,11.0f * lr.scale,false, true,  1.0f * lr.scale);
 
-    const float omegaMixSz = 128.0f;
-    const float switchH  = 60.0f;
-    const float routingW = 310.0f;
+    inputLabel.setColour (Label::textColourId, AuricTheme::goldTextHi().withAlpha (0.96f));
+    releaseLabel.setColour (Label::textColourId, AuricTheme::goldTextHi().withAlpha (0.96f));
+    toneGroupLabel.setColour (Label::textColourId, AuricTheme::goldTextDim().withAlpha (0.86f));
 
-    const float switchesY = baseH - mB - switchH;
+    helpLine.setUiScale (lr.scale);
+    valueTooltip.setUiScale (lr.scale);
 
-    const float omegaMixX = mL + 44.0f;
-    const float omegaMixY = baseH - mB - (omegaMixSz + 20.0f);
-
-    omegaMixKnob.setBounds  (R (omegaMixX, omegaMixY, omegaMixSz, omegaMixSz));
-    omegaMixLabel.setBounds (R (omegaMixX, omegaMixY + omegaMixSz + 6.0f, omegaMixSz, 18.0f));
-
-    const float routingX = baseW - mR - routingW;
-    routingSwitch.setBounds (R (routingX, switchesY, routingW, switchH));
-
-    const float leftStop  = omegaMixX + omegaMixSz + 40.0f;
-    const float rightStop = routingX - 40.0f;
-
-    float omegaModeW = rightStop - leftStop;
-    omegaModeW = jlimit (240.0f, 360.0f, omegaModeW);
-
-    const float omegaModeX = leftStop + (rightStop - leftStop - omegaModeW) * 0.3f;
-    omegaModeSwitch.setBounds (R (omegaModeX, switchesY, omegaModeW, switchH));
-
-    // LEDs
-    const float ledY = switchesY + 18.0f;
-    const float ledSize = 10.0f;
-    const float ledSpacing = 16.0f;
-    const float ledsStartX = omegaModeX + 45.0f;
-
-    led1.setBounds (R (ledsStartX, ledY, ledSize, ledSize));
-    led2.setBounds (R (ledsStartX + ledSpacing, ledY, ledSize, ledSize));
-
-    // Overlay full editor
     if (creditsOverlay)
         creditsOverlay->setBounds (getLocalBounds());
 
     bgDirty = true;
-}
-
-//==============================================================================
-// LED update
-void AuricOmega76AudioProcessorEditor::updateLEDIndicators()
-{
-    const int routing = routingSwitch.getSelectedIndex();
-
-    switch (routing)
-    {
-        case 0: // A - Compressor only
-            led1.setOn (true);
-            led2.setOn (false);
-            break;
-
-        case 1: // D - Drive only
-            led1.setOn (false);
-            led2.setOn (true);
-            break;
-
-        case 2: // Ω - Both
-            led1.setOn (true);
-            led2.setOn (true);
-            break;
-
-        default:
-            led1.setOn (false);
-            led2.setOn (false);
-            break;
-    }
-
-    led1.repaint();
-    led2.repaint();
 }

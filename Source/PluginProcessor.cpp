@@ -354,6 +354,11 @@ AuricOmega76AudioProcessor::APVTS::ParameterLayout AuricOmega76AudioProcessor::c
         StringArray { "A", "D", "Ω" },
         0));
 
+    params.push_back (std::make_unique<AudioParameterChoice> (
+        ParameterID { "quality", 1 }, "QUALITY",
+        StringArray { "Ω Auto", "O1 x1", "O3 x2", "O3 x4" },
+        0));
+
     return { params.begin(), params.end() };
 }
 //==============================================================================

@@ -3,7 +3,7 @@
 
 // Slider rotary khusus:
 // - Shift = fine adjust (lebih lambat)
-// - Popup value saat drag (built-in bubble)
+// - Custom tooltip handled externally
 // - Double click reset value
 class AuricKnob : public juce::Slider
 {
@@ -13,13 +13,13 @@ public:
                     juce::Slider::NoTextBox)
     {
         setScrollWheelEnabled (true);
-        setPopupDisplayEnabled (true, false, nullptr); // parent akan kamu set dari editor
+        setPopupDisplayEnabled (false, false, nullptr); // custom tooltip handles value display
         setMouseDragSensitivity (normalSensitivityPx); // default
     }
 
     void setPopupParent (juce::Component* parent)
     {
-        setPopupDisplayEnabled (true, false, parent);
+        setPopupDisplayEnabled (false, false, parent);
     }
 
     void setFineDragMultiplier (float mult)
@@ -43,9 +43,28 @@ public:
         setDoubleClickReturnValue (true, v);
     }
 
+    void setValueTextLabel (juce::String text)
+    {
+        valueTextLabel = std::move (text);
+    }
+
+    const juce::String& getValueTextLabel() const { return valueTextLabel; }
+
+    void setHelpText (juce::String text)
+    {
+        helpText = std::move (text);
+    }
+
+    const juce::String& getHelpText() const { return helpText; }
+
+    bool isDraggingByMouse() const { return isDragging; }
+
+    std::function<void (AuricKnob&, bool)> onHoverChange;
+
 protected:
     void mouseDown (const juce::MouseEvent& e) override
     {
+        isDragging = true;
         updateSensitivityForMods (e.mods);
         juce::Slider::mouseDown (e);
     }
@@ -60,13 +79,23 @@ protected:
     {
         // balik ke normal
         setMouseDragSensitivity (normalSensitivityPx);
+        isDragging = false;
         juce::Slider::mouseUp (e);
+    }
+
+    void mouseEnter (const juce::MouseEvent& e) override
+    {
+        if (onHoverChange)
+            onHoverChange (*this, true);
+        juce::Slider::mouseEnter (e);
     }
 
     void mouseExit (const juce::MouseEvent& e) override
     {
         // safety: kalau cursor keluar saat shift, balikin normal
         setMouseDragSensitivity (normalSensitivityPx);
+        if (onHoverChange)
+            onHoverChange (*this, false);
         juce::Slider::mouseExit (e);
     }
 
@@ -82,6 +111,10 @@ private:
 
     int normalSensitivityPx = 220; // makin besar = makin halus
     int fineSensitivityPx   = 660; // default 3x
+
+    bool isDragging = false;
+    juce::String valueTextLabel;
+    juce::String helpText;
 };
 
 
